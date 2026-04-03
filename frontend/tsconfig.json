@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",  // Nên dùng để tự động import React (nếu chưa đổi thì đổi luôn)
+    "allowJs": true,
+    "baseUrl": ".",
+    "target": "ES2022",  // An toàn và tương thích tốt với Vite
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client", "node"],
+    "skipLibCheck": true,
+
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+
+    "paths": {
+      "@/*": ["./src/*"]   // Đã đúng với "./src/*"
+    }
+  },
+  "include": [
+    "src",
+    "src/App.tsx",
+    "vite.config.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+
+  // Xóa hoặc comment phần này đi
+  // "references": [ { "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" } ]
+}
