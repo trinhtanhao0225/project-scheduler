@@ -103,21 +103,22 @@ The system is built with scalability, extensibility, and production-readiness in
 - AI-based explanation & adjustment suggestions  
 - Scalable and modular architecture  
 
----
 
 ## 🧪 Quick Start
 
 ### 1. Install dependencies
 ```bash
 pip install -r requirements.txt
-
+```
 ### 2. Start MongoDB
 Make sure MongoDB is running locally
 
 ### 3. Run backend
 ```bash
 uvicorn main:app --reload
-
+```
 ### 3. Run /frontend
 ```bash
+cd frontend
+npm install
 npm run dev
