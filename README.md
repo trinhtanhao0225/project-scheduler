@@ -111,4 +111,13 @@ The system is built with scalability, extensibility, and production-readiness in
 ```bash
 pip install -r requirements.txt
 
+### 2. Start MongoDB
+Make sure MongoDB is running locally
 
+### 3. Run backend
+```bash
+uvicorn main:app --reload
+
+### 3. Run /frontend
+```bash
+npm run dev
