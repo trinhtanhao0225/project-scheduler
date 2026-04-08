@@ -1,33 +1,55 @@
 import React, { useState, useMemo } from "react";
 
-export default function AssignmentsPage({ nurses = [], patients = [] }) {
+export default function AssignmentsPage({ 
+  nurses = [], 
+  patients = [] 
+}) {
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [selectedNurse, setSelectedNurse] = useState(null);
   const [selectedPatient, setSelectedPatient] = useState(null);
 
-  // ID Normalization (Supports both ObjectId and string)
+  // ID Normalization
   const normalizeId = (id) => {
     if (!id) return null;
     return typeof id === "object" ? id.toString() : String(id);
   };
 
-  // Performance Optimization: Compute statistics and workload only when props change
+  // ====================== FILTER PATIENTS BY SELECTED DATE ======================
+  const filteredPatients = useMemo(() => {
+    return patients.filter((patient) => {
+      if (!patient.earliest_start || !patient.latest_end) return false;
+
+      const patientStartDate = new Date(patient.earliest_start).toISOString().slice(0, 10);
+      const patientEndDate = new Date(patient.latest_end).toISOString().slice(0, 10);
+
+      return patientStartDate <= selectedDate && patientEndDate >= selectedDate;
+    });
+  }, [patients, selectedDate]);
+
+  // ====================== PROCESSED NURSES WORKLOAD ======================
   const processedData = useMemo(() => {
     const totalNurses = nurses.length;
-    const totalPatients = patients.length;
+    const totalPatientsToday = filteredPatients.length;
 
     const nursesWithWorkload = nurses.map((nurse) => {
       const nurseId = normalizeId(nurse.id || nurse._id);
 
-      const assignedPatientsList = patients.filter(
+      // Get patients assigned to this nurse on the selected date
+      const assignedPatientsList = filteredPatients.filter(
         (p) => normalizeId(p.assigned_nurse_id) === nurseId
       );
 
+      // Calculate total actual care time for the day
       const totalCareMinutes = assignedPatientsList.reduce(
         (sum, p) => sum + (p.care_minutes || 0),
         0
       );
+
       const maxMinutes = nurse.default_max_minutes_per_day || nurse.max_minutes || 480;
-      const utilizationRate = maxMinutes > 0 ? Math.round((totalCareMinutes / maxMinutes) * 100) : 0;
+
+      const utilizationRate = maxMinutes > 0 
+        ? Math.round((totalCareMinutes / maxMinutes) * 100) 
+        : 0;
 
       return {
         ...nurse,
@@ -38,53 +60,78 @@ export default function AssignmentsPage({ nurses = [], patients = [] }) {
         utilizationRate,
         remainingMinutes: Math.max(0, maxMinutes - totalCareMinutes),
         isOverloaded: totalCareMinutes > maxMinutes,
+        assignedCount: assignedPatientsList.length,
       };
     });
 
-    const assignedPatientsCount = patients.filter((p) => normalizeId(p.assigned_nurse_id)).length;
-    const unassignedPatientsCount = totalPatients - assignedPatientsCount;
-    const assignmentRate = totalPatients ? Math.round((assignedPatientsCount / totalPatients) * 100) : 0;
+    const assignedPatientsCount = filteredPatients.filter((p) => normalizeId(p.assigned_nurse_id)).length;
+    const unassignedPatientsCount = totalPatientsToday - assignedPatientsCount;
+    const assignmentRate = totalPatientsToday 
+      ? Math.round((assignedPatientsCount / totalPatientsToday) * 100) 
+      : 0;
 
     return {
       nursesWithWorkload,
       stats: {
         totalNurses,
-        totalPatients,
+        totalPatientsToday,
         assignedPatientsCount,
         unassignedPatientsCount,
         assignmentRate,
       },
     };
-  }, [nurses, patients]);
+  }, [nurses, filteredPatients]);
 
   const { nursesWithWorkload, stats } = processedData;
 
-  // Selected Detail Data
+  // Detail data for modals
   const nursePatients = selectedNurse
-    ? patients.filter(
+    ? filteredPatients.filter(
         (p) => normalizeId(p.assigned_nurse_id) === normalizeId(selectedNurse.id || selectedNurse._id)
       )
     : [];
 
   const patientNurse = selectedPatient
-    ? nurses.find((n) => normalizeId(n.id || n._id) === normalizeId(selectedPatient.assigned_nurse_id))
+    ? nurses.find(
+        (n) => normalizeId(n.id || n._id) === normalizeId(selectedPatient.assigned_nurse_id)
+      )
     : null;
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-8">
+      {/* ==================== DATE PICKER ==================== */}
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow flex items-center gap-6">
+        <label className="font-semibold text-lg">📅 View Assignments for Date:</label>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="px-5 py-3 border border-gray-300 dark:border-gray-600 rounded-xl text-lg focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          onClick={() => setSelectedDate(new Date().toISOString().slice(0, 10))}
+          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition"
+        >
+          Today
+        </button>
+      </div>
+
       {/* Header Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <StatCard title="Total Nurses" value={stats.totalNurses} />
-        <StatCard title="Total Patients" value={stats.totalPatients} />
+        <StatCard title={`Patients (${selectedDate})`} value={stats.totalPatientsToday} />
         <StatCard title="Assigned" value={stats.assignedPatientsCount} color="green" />
         <StatCard title="Unassigned" value={stats.unassignedPatientsCount} color="red" />
         <StatCard title="Assignment Rate" value={`${stats.assignmentRate}%`} color="blue" />
       </div>
 
-      {/* Nurses Table */}
+      {/* Nurses Table - Workload by Date */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-        <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-2xl font-bold">Nurse Directory & Workload</h2>
+        <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+          <h2 className="text-2xl font-bold">👩‍⚕️ Nurse Workload - {selectedDate}</h2>
+          <p className="text-sm text-gray-500">
+            Workload is calculated based on actual patient care time on the selected day
+          </p>
         </div>
 
         <div className="overflow-x-auto">
@@ -93,7 +140,7 @@ export default function AssignmentsPage({ nurses = [], patients = [] }) {
               <tr>
                 <th className="px-6 py-4 text-left font-semibold">Nurse Name</th>
                 <th className="px-6 py-4 text-left font-semibold">Daily Limit</th>
-                <th className="px-6 py-4 text-left font-semibold">Allocated</th>
+                <th className="px-6 py-4 text-left font-semibold">Allocated Today</th>
                 <th className="px-6 py-4 text-left font-semibold">Remaining</th>
                 <th className="px-6 py-4 text-left font-semibold">Utilization</th>
                 <th className="px-6 py-4 text-left font-semibold">Patients</th>
@@ -132,19 +179,26 @@ export default function AssignmentsPage({ nurses = [], patients = [] }) {
                     </div>
                   </td>
                   <td className="px-6 py-5 font-semibold text-purple-600">
-                    {nurse.assignedPatientsList.length}
+                    {nurse.assignedCount}
                   </td>
                 </tr>
               ))}
+              {nursesWithWorkload.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="py-12 text-center text-gray-500">
+                    No nurse data available
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Patients Table */}
+      {/* Patients Table - By Date */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-2xl font-bold">Patient Directory</h2>
+          <h2 className="text-2xl font-bold">🛏️ Patients - {selectedDate}</h2>
         </div>
 
         <div className="overflow-x-auto">
@@ -153,11 +207,12 @@ export default function AssignmentsPage({ nurses = [], patients = [] }) {
               <tr>
                 <th className="px-6 py-4 text-left font-semibold">Patient Name</th>
                 <th className="px-6 py-4 text-left font-semibold">Care Time</th>
+                <th className="px-6 py-4 text-left font-semibold">Priority</th>
                 <th className="px-6 py-4 text-left font-semibold">Assignment Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {patients.map((patient) => {
+              {filteredPatients.map((patient) => {
                 const isAssigned = normalizeId(patient.assigned_nurse_id);
                 return (
                   <tr
@@ -167,6 +222,7 @@ export default function AssignmentsPage({ nurses = [], patients = [] }) {
                   >
                     <td className="px-6 py-5 font-medium">{patient.full_name}</td>
                     <td className="px-6 py-5">{patient.care_minutes} min</td>
+                    <td className="px-6 py-5 capitalize">{patient.priority || "routine"}</td>
                     <td className="px-6 py-5">
                       {isAssigned ? (
                         <span className="inline-block px-4 py-1 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 rounded-full text-sm font-medium">
@@ -181,6 +237,13 @@ export default function AssignmentsPage({ nurses = [], patients = [] }) {
                   </tr>
                 );
               })}
+              {filteredPatients.length === 0 && (
+                <tr>
+                  <td colSpan="4" className="py-12 text-center text-gray-500">
+                    No patients require care on {selectedDate}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -190,28 +253,35 @@ export default function AssignmentsPage({ nurses = [], patients = [] }) {
       {selectedNurse && (
         <Modal onClose={() => setSelectedNurse(null)}>
           <h3 className="text-2xl font-bold mb-6">{selectedNurse.full_name}</h3>
+          <p className="text-gray-500 mb-6">Date: {selectedDate}</p>
 
-          <div className="grid grid-cols-2 gap-6 mb-6">
+          <div className="grid grid-cols-2 gap-6 mb-8">
             <div>
               <p className="text-gray-500 text-sm uppercase font-semibold">Daily Limit</p>
-              <p className="text-2xl font-bold">{selectedNurse.maxMinutes} min</p>
+              <p className="text-3xl font-bold">{selectedNurse.maxMinutes} min</p>
             </div>
             <div>
-              <p className="text-gray-500 text-sm uppercase font-semibold">Allocated</p>
-              <p className="text-2xl font-bold text-blue-600">{selectedNurse.totalCareMinutes} min</p>
+              <p className="text-gray-500 text-sm uppercase font-semibold">Allocated Today</p>
+              <p className="text-3xl font-bold text-blue-600">{selectedNurse.totalCareMinutes} min</p>
             </div>
           </div>
 
-          <h4 className="font-semibold mb-3">Assigned Patients ({nursePatients.length})</h4>
+          <h4 className="font-semibold mb-4">
+            Assigned Patients Today ({nursePatients.length})
+          </h4>
+
           {nursePatients.length === 0 ? (
-            <p className="text-gray-500 italic">No patients assigned to this nurse yet.</p>
+            <p className="text-gray-500 italic">No patients assigned to this nurse on this day.</p>
           ) : (
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {nursePatients.map((p) => (
-                <div key={normalizeId(p.id || p._id)} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-xl border border-gray-100 dark:border-gray-600">
-                  <div className="font-medium">{p.full_name}</div>
-                  <div className="text-sm text-gray-500">
-                    {p.care_minutes} min • Priority: <span className="capitalize">{p.priority}</span>
+                <div
+                  key={normalizeId(p.id || p._id)}
+                  className="bg-gray-50 dark:bg-gray-700 p-5 rounded-2xl border border-gray-100 dark:border-gray-600"
+                >
+                  <div className="font-medium text-lg">{p.full_name}</div>
+                  <div className="text-sm text-gray-500 mt-1">
+                    {p.care_minutes} minutes • Priority: <span className="capitalize">{p.priority}</span>
                   </div>
                 </div>
               ))}
@@ -223,24 +293,28 @@ export default function AssignmentsPage({ nurses = [], patients = [] }) {
       {selectedPatient && (
         <Modal onClose={() => setSelectedPatient(null)}>
           <h3 className="text-2xl font-bold mb-4">{selectedPatient.full_name}</h3>
-          <div className="space-y-1 mb-6">
+          <p className="text-gray-500 mb-6">Date: {selectedDate}</p>
+
+          <div className="space-y-3 mb-8">
             <p className="text-lg">
-              Required Care: <span className="font-semibold">{selectedPatient.care_minutes} min</span>
+              Care Time: <span className="font-semibold">{selectedPatient.care_minutes} minutes</span>
             </p>
             <p className="text-lg">
               Priority: <span className="capitalize font-medium">{selectedPatient.priority}</span>
             </p>
           </div>
 
-          <div className="mt-8 border-t border-gray-100 dark:border-gray-700 pt-6">
+          <div className="border-t border-gray-100 dark:border-gray-700 pt-6">
             {patientNurse ? (
-              <div className="bg-green-50 dark:bg-green-900/30 p-5 rounded-2xl border border-green-100 dark:border-green-800">
+              <div className="bg-green-50 dark:bg-green-900/30 p-6 rounded-2xl border border-green-100 dark:border-green-800">
                 <p className="text-green-700 dark:text-green-300 font-medium">Assigned Nurse:</p>
-                <p className="text-2xl font-bold mt-1 text-green-900 dark:text-green-100">{patientNurse.full_name}</p>
+                <p className="text-3xl font-bold mt-2 text-green-900 dark:text-green-100">
+                  {patientNurse.full_name}
+                </p>
               </div>
             ) : (
-              <div className="bg-red-50 dark:bg-red-900/30 p-5 rounded-2xl border border-red-100 dark:border-red-800 text-red-700 dark:text-red-300 font-medium">
-                This patient has not been assigned to a nurse yet.
+              <div className="bg-red-50 dark:bg-red-900/30 p-6 rounded-2xl border border-red-100 dark:border-red-800 text-red-700 dark:text-red-300">
+                This patient has not been assigned to any nurse on {selectedDate}.
               </div>
             )}
           </div>
@@ -254,13 +328,9 @@ export default function AssignmentsPage({ nurses = [], patients = [] }) {
 
 function StatCard({ title, value, color = "" }) {
   const colorClass =
-    color === "green"
-      ? "text-green-600"
-      : color === "red"
-      ? "text-red-600"
-      : color === "blue"
-      ? "text-blue-600"
-      : "text-gray-900 dark:text-white";
+    color === "green" ? "text-green-600" :
+    color === "red" ? "text-red-600" :
+    color === "blue" ? "text-blue-600" : "text-gray-900 dark:text-white";
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6 text-center border border-gray-50 dark:border-gray-700">
@@ -279,7 +349,7 @@ function Modal({ children, onClose }) {
         <div className="p-8 relative">
           <button
             onClick={onClose}
-            className="absolute top-6 right-6 text-3xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 leading-none"
+            className="absolute top-6 right-6 text-4xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 leading-none"
           >
             &times;
           </button>

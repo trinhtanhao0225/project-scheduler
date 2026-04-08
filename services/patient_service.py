@@ -39,7 +39,8 @@ def generate_patients_service(n: int = 10):
     """
     patients = []
 
-    base_time = datetime(2026, 1, 1, 8, 0, 0)
+    today = datetime.now()
+    base_time = datetime(today.year, today.month, today.day, 7, 0, 0)
     skills_pool = [
         "ICU", "Injection", "ElderCare", "Rehab",
         "MedicationManagement", "WoundCare", "VitalSignsMonitoring",

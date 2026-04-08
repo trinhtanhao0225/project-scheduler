@@ -40,7 +40,8 @@ def generate_nurses_service(n: int = 30, default_max_minutes_per_day: int = 480)
     """
     nurses = []
 
-    base_time = datetime(2026, 3, 26, 7, 0, 0)   # Ví dụ ca sáng
+    today = datetime.now()
+    base_time = datetime(today.year, today.month, today.day, 7, 0, 0)
     skills_pool = [
         "ICU", "Injection", "ElderCare", "Rehab", "MedicationManagement",
         "WoundCare", "VitalSignsMonitoring", "PostSurgeryCare", 
